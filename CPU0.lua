@@ -37,8 +37,8 @@ local viewRot = vec3(0,0,0)
 -- initialize gl 
 gl.Load( gdt.VideoChip0 )
 
-gl.SetParam( "gl_SORT", true )      -- sort triangles
-gl.SetParam( "gl_CULL_FACE", true ) -- backface culling
+gl.SetParam( "GL_SORT", true )      -- sort triangles
+gl.SetParam( "GL_CULL_FACE", true ) -- backface culling
 gl.SetFOV( 90 )
 gl.SetFarClip( 10.0 )
 gl.SetViewTransform( viewPos, viewRot )
@@ -53,6 +53,16 @@ texImg2D( 3, img_side.width,  img_side.height,  img_side:toPixelData() )
 local texTop = vc.RenderBuffers[ 1 ]
 local texFront = vc.RenderBuffers[ 2 ]
 local texSides = vc.RenderBuffers[ 3 ]
+
+
+function drawCube()
+	gl.BindTexture( texSides )
+	gl.DrawVerticesQuad( 1, 2 ) -- draw sides
+	gl.BindTexture( texTop )
+	gl.DrawVerticesQuad( 3, 2 ) -- draw top and bottom
+	gl.BindTexture( texFront )
+	gl.DrawVerticesQuad( 5, 2 ) -- draw front and back
+end
 
 function update()
 	local t = gdt.CPU0.Time * 2 
@@ -69,24 +79,12 @@ function update()
 	gl.Clear()
 
 	-- draw stationary cube
-	gl.SetModelTransform( vec3( 0,0,0 ), vec3( 0,0,0 ) )
-
-	gl.BindTexture( texSides )
-	gl.DrawVerticesQuad( 1, 2 ) -- draw sides
-	gl.BindTexture( texTop )
-	gl.DrawVerticesQuad( 3, 2 ) -- draw top and bottom
-	gl.BindTexture( texFront )
-	gl.DrawVerticesQuad( 5, 2 ) -- draw front and back
-
+	gl.SetModelTransform( vec3( 0,0,0 ), vec3( 0.3,0.3,0 ) )
+	drawCube()
+	
 	-- draw spinning cube
 	gl.SetModelTransform( vec3( 1,0,0 ), vec3( t,t,t ) )
-
-	gl.BindTexture( texSides )
-	gl.DrawVerticesQuad( 1, 2 ) -- draw sides
-	gl.BindTexture( texTop )
-	gl.DrawVerticesQuad( 3, 2 ) -- draw top and bottom
-	gl.BindTexture( texFront )
-	gl.DrawVerticesQuad( 5, 2 ) -- draw front and back
+	drawCube()
 
 	-- finalize frame and print debug info
 	gl.EndFrame()

@@ -9,10 +9,14 @@ local mVC:VideoChip
 local mVertexBufferCounter = 0
 local mVertexBuffers = {}
 local mVertexData = {}
+
+local mHalfWidth = 1
+local mHalfHeight = 1
 local mFov = 45.0
 local mAspect = 0   -- aspect ratio
 local mNearClipDist = 0.1
 local mNearFarQ = 0 -- near/far plane clamping
+
 local mViewTranslation = vec3( 0, 0, 0 )
 local mViewRotation    = vec3( 0, 0, 0 )
 local mModelTranslation = vec3( 0, 0, 0 )
@@ -33,8 +37,8 @@ local drawLoopBegin:number, drawLoopEnd:number
 local drawLoopSource:{{vec3}} = {}
 
 local mParams = {
-	["RGL_SORT"] = false,
-	["RGL_CULL_FACE"] = false
+	["GL_SORT"] = false,
+	["GL_CULL_FACE"] = false
 }
 
 ------------------------------------------------------------
@@ -85,10 +89,7 @@ end
 ------------------------------------------------------------
 
 function __sortQuadFunction( _a, _b ) : boolean
-	local aCentre = _a[1].Z + _a[2].Z + _a[3].Z + _a[4].Z
-	local bCentre = _b[1].Z + _b[2].Z + _b[3].Z + _b[4].Z
-	
-	return aCentre > bCentre
+	return _a[6] > _b[6]
 end
 
 ------------------------------------------------------------
@@ -105,7 +106,7 @@ end
 
 ------------------------------------------------------------
 
-function project( _v:vec3 )
+function __project( _v:vec3 )
 	_v = __v3RotateX(
 			__v3RotateY(
 					__v3RotateZ(_v, mModelRotation.Z)
@@ -113,12 +114,11 @@ function project( _v:vec3 )
 			,mModelRotation.X)
 	_v += mModelTranslation * vec3(1,1,-1) 
 	_v += mViewTranslation
-
 	local a = __vec3ToScreen(_v, 0.1, mFov, mAspect, mNearFarQ )
 	
 	return vec3(
-		(a.X + 1) * mVC.Width / 2, 
-		(a.Y + 1) * mVC.Height / 2,
+		(a.X + 1) * mHalfWidth, 
+		(a.Y + 1) * mHalfHeight,
 		-a.Z)
 end
 
@@ -128,6 +128,8 @@ end
 
 function gl.Load( _vc:VideoChip )
 	mVC = _vc
+	mHalfWidth = mVC.Width / 2
+	mHalfHeight = mVC.Height / 2
 end
 
 ------------------------------------------------------------
@@ -143,24 +145,25 @@ end
 ------------------------------------------------------------
 
 function gl.PrintDebugData()
-  gl.DebugPrint( string.format( "mVertexBufferCounter: %i", mVertexBufferCounter ) )
-	gl.DebugPrint( string.format( "mFov: %f", mFov ) ) 
-	gl.DebugPrint( string.format( "mAspect: %f", mAspect ) )
-	gl.DebugPrint( string.format( "mNearFarQ: %f ", mNearFarQ ) )
-	
-	gl.DebugPrint( "mViewTranslation" )
+	gl.DebugPrint( string.format( "FPS %i", 1 / gdt.CPU0.DeltaTime ) )
+	gl.DebugPrint("")
+	gl.DebugPrint( string.format( "Num Vertex Buffers: %i", mVertexBufferCounter ) )
+	gl.DebugPrint( string.format( "Fov: %f", mFov ) ) 
+	gl.DebugPrint( string.format( "Aspect: %f", mAspect ) )
+	gl.DebugPrint( string.format( "Near Far Q: %f ", mNearFarQ ) )
+	gl.DebugPrint("")
+	gl.DebugPrint( "View Translation" )
 	gl.DebugPrint( string.format( "  X: %f", mViewTranslation.X ) )
 	gl.DebugPrint( string.format( "  Y: %f", mViewTranslation.Y ) )
 	gl.DebugPrint( string.format( "  Z: %f", mViewTranslation.Z ) )
-	
-	gl.DebugPrint( "mViewRotation" )
+	gl.DebugPrint("")
+	gl.DebugPrint( "View Rotation" )
 	gl.DebugPrint( string.format( "  X: %f Radians", mViewRotation.X ) )
 	gl.DebugPrint( string.format( "  Y: %f Radians", mViewRotation.Y ) )
 	gl.DebugPrint( string.format( "  Z: %f Radians", mViewRotation.Z ) )
-
-	gl.DebugPrint( string.format( "mDrawTarget: %i", mDrawTarget ) )
-	gl.DebugPrint( string.format( "mBoundTexture: %s", mBoundTexture == nil and "none" or mBoundTexture.Type ) )
-	gl.DebugPrint( string.format( "mBoundTextureIsRenderBuffer: %s", mBoundTextureIsRenderBuffer and "true" or "false" ) )
+	gl.DebugPrint("")
+	gl.DebugPrint( string.format( "Draw Target: %i", mDrawTarget ) )
+	gl.DebugPrint( string.format( "Bound Texture: %s", mBoundTexture == nil and "none" or mBoundTexture.Type ) )
 end
 
 ------------------------------------------------------------
@@ -258,12 +261,12 @@ end
 ------------------------------------------------------------
 
 function gl.DrawVerticesTri( _base:number, _count:number )
-	local cullFace = mParams[ "RGL_CULL_FACE" ]
+	local cullFace = mParams[ "GL_CULL_FACE" ]
 	
 	for i=_base, _base + _count - 1 do
-		drawV0 = project( mVertexData[i][1] )
-		drawV1 = project( mVertexData[i][2] )
-		drawV2 = project( mVertexData[i][3] )
+		drawV0 = __project( mVertexData[i][1] )
+		drawV1 = __project( mVertexData[i][2] )
+		drawV2 = __project( mVertexData[i][3] )
 		
 		if cullFace and __crossProduct( drawV1 - drawV0, drawV2 - drawV0 ).Z > 0 then
 				continue
@@ -282,18 +285,22 @@ end
 
 function gl.DrawVerticesQuad( _base:number, _count:number )
 	for i=_base, _base + _count - 1 do
-		drawV0 = project( mVertexData[i][1] )
-		drawV1 = project( mVertexData[i][2] )
-		drawV2 = project( mVertexData[i][3] )
-		drawV3 = project( mVertexData[i][4] )
+		drawV0 = __project( mVertexData[i][1] )
+		drawV1 = __project( mVertexData[i][2] )
+		drawV2 = __project( mVertexData[i][3] )
+		drawV3 = __project( mVertexData[i][4] )
 		
-		mDrawQuads[ #mDrawQuads + 1 ] = {drawV0, drawV1, drawV2, drawV3, mBoundTexture}
+		mDrawQuads[ #mDrawQuads + 1 ] = {
+			drawV0, drawV1, drawV2, drawV3,           -- 1-4 vertices
+			mBoundTexture,                            -- 5   texture
+			drawV0.Z + drawV1.Z + drawV2.Z + drawV3.Z -- 6   Z val
+		}
 	end
 end
 
 function gl.__DrawQuads()
-	local sort = mParams[ "RGL_SORT" ]
-	local cullFace = mParams[ "RGL_CULL_FACE" ]
+	local sort = mParams[ "GL_SORT" ]
+	local cullFace = mParams[ "GL_CULL_FACE" ]
 	
 	if sort then
 		table.sort( mDrawQuads, __sortQuadFunction )
